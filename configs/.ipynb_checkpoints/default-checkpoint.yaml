@@ -1,0 +1,128 @@
+NUM_GPUS: 1 #4块GPU
+NUM_SHARDS: 1 #数据分片数量为1
+SHARD_ID: 0 #当前分片ID为0
+DIST_BACKEND: nccl #分布式后端，NCCL是GPU间通信最高效的库
+RNG_SEED: 0 #随机种子
+LOG_FILE_PATH: './logs' #日志文件路径
+INIT_METHOD: 'tcp://localhost:9999' #初始化方法
+AMP_ENABLE: False #关闭自动混合精度，将使用标准的单精度浮点计算，不进行精度混合
+TRAIN:
+  ENABLE: True #启用训练模式
+  MAX_EPOCH: 20 #训练总轮数为20个epoch
+  EVAL_PERIOD: 1 #评估周期，每个epoch评估一次
+  CHECKPOINT_PERIOD: 5 #每5个epoch保存一次模型检查点
+  CHECKPOINT_EPOCH_RESET: FALSE #不重置检查点的轮次
+  CHECKPOINT_LOAD_PATH: '' #空字符串，表示不从特定路径加载检查点
+  CHECKPOINT_SAVE_PATH: '.' #在当前目录保存检查点
+TEST:
+  ENABLE: True #启用测试模式
+  CHECKPOINT_TEST_PATH: '' #测试时不指定特定的检查点路径
+DATASET:
+  NAME: CelebDF
+  DATASET_NAME: CelebDF  # 数据集名称
+  ROOT_DIR: /root/autodl-tmp/celeb-df-v2-img  # 数据集根目录
+  TRAIN_INFO_TXT: '/root/autodl-tmp/test_splits-img/train.txt'  # 训练集信息文件
+  VAL_INFO_TXT: '/root/autodl-tmp/test_splits-img/eval.txt'  # 验证集信息文件
+  TEST_INFO_TXT: '/root/autodl-tmp/test_splits-img/test.txt'  # 测试集信息文件
+  IMG_SIZE: 380  # 图像大小
+  SCALE_RATE: 1.0  # 图像缩放比例
+  ROTATE_ANGLE: 10 #图像旋转角度
+  CUTOUT_H: 10 #图像旋转角度
+  CUTOUT_W: 10 #随机遮挡宽度
+  COMPRESSION_LOW: 65 #图像压缩最低质量
+  COMPRESSION_HIGH: 80 #图像压缩最低质量
+  AUGMENTATIONS:
+    TRAIN: []
+    TEST: []
+  #训练时的数据增强
+  TRAIN_AUGMENTATIONS:
+    COMPOSE:
+      [
+        [
+          ChannelDropout, #随机丢弃图像的某些颜色通道
+          ToGray, #将图像转换为灰度图像
+        ],
+        [
+          ColorJitter, #随机调整颜色属性
+          RandomBrightnessContrast, #随机调整亮度和对比度
+          HueSaturationValue, #随机调整色调、饱和度和明度
+          CLAHE, #对图像进行局部直方图均衡化
+          RandomGamma, #随机调整图像的伽马值
+          Sharpen, #锐化图像
+        ],
+        [
+          Blur, #模糊图像
+          MotionBlur, #运动模糊
+          GaussianBlur, #高斯模糊
+          GlassBlur #玻璃模糊
+        ],
+        GaussNoise, #高斯噪声
+        HorizontalFlip, #水平翻转图像
+        Rotate, # 旋转图像
+        [
+          RandomFog, #随机雾
+          RandomRain, #随机雨
+          RandomSnow, #随机雪
+          RandomSunFlare, #随机太阳辉
+          RandomToneCurve #随机调整色调
+        ],
+        CoarseDropout, #粗糙裁剪
+        ImageCompression, #图像压缩
+        Normalize #归一化
+      ]
+    ROTATE_PARAMS: [10] #旋转的最大角度为10度
+    COARSEDROPOUT_PARAMS: [10, 10] #随机遮挡图像的参数，可能指定遮挡区域的大小和数量
+    IMAGECOMPRESSION_PARAMS: [65, 80] #图像压缩的质量范围，从65%到80%
+    NORMALIZE_PARAMS: [[0.485, 0.456, 0.406], [0.229, 0.224, 0.225]] #图像归一化的均值和标准差
+    #这些值是在ImageNet数据集上预训练模型常用的标准化参数
+  #测试数据增强
+  TEST_AUGMENTATIONS:
+    COMPOSE: [Resize, Normalize] #测试时只进行图像大小调整和归一化
+    NORMALIZE_PARAMS: [[0.485, 0.456, 0.406], [0.229, 0.224, 0.225]] #使用与训练相同的归一化参数
+DATALOADER: #数据加载器配置
+  BATCH_SIZE: 8 #每个批次的样本数
+  NUM_WORKERS: 4 #数据加载的进程数
+  PIN_MEM: True #使用锁页内存，加速数据加载
+#优化器配置  
+OPTIMIZER:
+  OPTIMIZER_METHOD: adamw #使用AdamW优化器
+  BASE_LR: 0.001 #基础学习率
+  ADAM_BETAS: [0.9, 0.999] #Adam优化器的beta参数
+  EPS: 0.00000001 #数值稳定性参数
+  WEIGHT_DECAY: 0.01 #权重衰减系数
+  AMSGRAD: False #不使用AMSGrad变体
+  MOMENTUM: 0.9 #动量
+  
+LOSS:
+  LOSS_FUN: FocalLoss #使用Focal Loss作为损失函数
+  LOSS_WEIGHT: 1 #损失权重
+  logits: True #使用模型的原始输出
+MODEL:
+  MODEL_NAME: M2TR #模型名称
+  PRETRAINED: 'imagenet'  #使用ImageNet预训练权重
+  ESCAPE: '' #转义字符（此处为空）
+  IMG_SIZE: 320 #图像大小
+  BACKBONE: efficientnet-b4 #使用EfficientNet-B4作为主干网络
+  DEPTH: 4 #网络深度
+  TEXTURE_LAYER: b2 #纹理特征层
+  FEATURE_LAYER: final #特征提取层
+  NUM_CLASSES: 2 #分类数（二分类：真实/伪造）
+  DROP_RATIO: 0.5  #随机失活比例
+  HAS_DECODER: False #是否使用解码器
+
+#学习率调度器配置：
+SCHEDULER:
+  LR_NOISE_PCT: 0.67 #学习率噪声百分比
+  LR_NOISE_STD: 1.0 #学习率噪声标准差
+  SEED: 42 #随机种子
+  LR_CYCLE_MUL: 1.0 #学习率循环倍增器
+  LR_CYCLE_DECAY: 0.1 #学习率循环衰减
+  LR_CYCLE_LIMIT: 1 #学习率循环限制
+  SCHEDULER_TYPE: cosine #余弦退火学习率调度
+  MIN_LR: 0.000001 #最小学习率
+  WARMUP_LR: 0 #预热起始学习率
+  WARMUP_EPOCHS: 0 #预热轮数
+  COOLDOWN_EPOCHS: 10 #冷却轮数
+  LR_K_DECAY: 1.0 #学习率衰减系数
+  SCHEDULER_STEP: 5 #学习率调整步骤
+  SCHEDULER_GAMMA: 0.5 #学习率衰减系数

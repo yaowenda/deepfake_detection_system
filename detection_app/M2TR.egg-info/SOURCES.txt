@@ -1,0 +1,5 @@
+setup.py
+M2TR.egg-info/PKG-INFO
+M2TR.egg-info/SOURCES.txt
+M2TR.egg-info/dependency_links.txt
+M2TR.egg-info/top_level.txt

@@ -1,0 +1,16 @@
+Metadata-Version: 1.1
+Name: M2TR
+Version: 0.1.1
+Summary: UNKNOWN
+Home-page: UNKNOWN
+Author: UNKNOWN
+Author-email: UNKNOWN
+License: apache 2.0
+Description: UNKNOWN
+Platform: UNKNOWN
+Requires: timm
+Requires: fvcore
+Requires: albumentations
+Requires: kornia
+Requires: simplejson
+Requires: tensorboard
