@@ -1,14 +1,18 @@
 import torch
-from PIL import Image
+from PIL import Image, ImageDraw
 import torchvision.transforms as transforms
 import yaml
 import os
 from M2TR.models.m2tr import M2TR
+import numpy as np
+from typing import Union, Tuple, List
+import cv2  # 添加 cv2 导入
+import time
 
 class DeepfakeDetector:
     def __init__(self, model_path):
         # 加载配置文件
-        with open('../configs/m2tr.yaml', 'r') as f:
+        with open('../configs/m2tr.yaml', 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f)
         
         # 初始化设备
@@ -99,34 +103,136 @@ class DeepfakeDetector:
             transforms.Normalize(mean=[0.485, 0.456, 0.406], 
                               std=[0.229, 0.224, 0.225])
         ])
+
         
         print("\n初始化完成")
-    
-    def predict(self, image):
-        # 预处理图像
-        if isinstance(image, str):
-            image = Image.open(image).convert('RGB')
-        image = self.transform(image).unsqueeze(0)
+
+
+
+    def add_scan_effect(self, image):
+        """添加扫描动画效果"""
+        img = image.copy()
+        draw = ImageDraw.Draw(img)
+        
+        # 添加边框
+        width, height = img.size
+        border = 3
+        draw.rectangle([(0, 0), (width-1, height-1)], outline='cyan', width=border)
+        
+        # 添加角标
+        corner_length = 20
+        # 左上角
+        draw.line([(0, 0), (corner_length, 0)], fill='cyan', width=border)
+        draw.line([(0, 0), (0, corner_length)], fill='cyan', width=border)
+        # 右上角
+        draw.line([(width-1, 0), (width-1-corner_length, 0)], fill='cyan', width=border)
+        draw.line([(width-1, 0), (width-1, corner_length)], fill='cyan', width=border)
+        # 左下角
+        draw.line([(0, height-1), (corner_length, height-1)], fill='cyan', width=border)
+        draw.line([(0, height-1), (0, height-1-corner_length)], fill='cyan', width=border)
+        # 右下角
+        draw.line([(width-1, height-1), (width-1-corner_length, height-1)], fill='cyan', width=border)
+        draw.line([(width-1, height-1), (width-1, height-1-corner_length)], fill='cyan', width=border)
+        
+        return img
+
+
+    def predict(self, input_data):
+        """统一的预测接口，支持图片和视频输入"""
+        # 处理视频输入
+        if isinstance(input_data, str) and input_data.lower().endswith(('.mp4', '.avi', '.mov')):
+            print("\n🎥 开始处理视频...")
+            frames = self.extract_frames(input_data)
+            frame_predictions = []
+            fake_probs = []
+            processed_frames = []  # 存储处理后的帧
+            
+            for i, frame in enumerate(frames):
+                print(f"\n⏳ 正在分析第 {i+1}/{len(frames)} 帧...")
+                # 添加扫描效果
+                frame_with_effect = self.add_scan_effect(frame)
+                processed_frames.append(frame_with_effect)
+                
+                # 对每一帧进行预测
+                image = self.transform(frame).unsqueeze(0)
+                image = image.to(self.device)
+                
+                with torch.no_grad():
+                    print("🔍 运行深度伪造检测...")
+                    output = self.model({'img': image})
+                    logits = output['logits']
+                    probs = torch.softmax(logits, dim=1)
+                    fake_prob = float(probs[0][1].cpu())
+                    print(f"📊 当前帧伪造概率: {fake_prob:.4f}")
+                    fake_probs.append(fake_prob)
+
+                time.sleep(0.1)  # 添加小延迟以展示进度
+            
+            # 计算平均伪造概率
+            avg_fake_prob = np.mean(fake_probs)
+            is_fake = avg_fake_prob > 0.5
+            print(f"\n✨ 视频分析完成！平均伪造概率: {avg_fake_prob:.4f}")
+            return is_fake, avg_fake_prob
+
+        # 处理图片输入
+        print("\n📸 开始处理图片...")
+        if isinstance(input_data, str):
+            input_data = Image.open(input_data).convert('RGB')
+        # 添加扫描效果
+        input_data_with_effect = self.add_scan_effect(input_data)
+        print("🔄 预处理图像...")
+        image = self.transform(input_data).unsqueeze(0)
         image = image.to(self.device)
         
-        # 推理
+        print("🔍 运行深度伪造检测...")
         with torch.no_grad():
             output = self.model({'img': image})
             logits = output['logits']
-            
-            # 打印原始输出
             print(f"\n原始logits: {logits}")
-            
-            # 使用softmax获取概率
             probs = torch.softmax(logits, dim=1)
-            
-            # 获取具体的预测概率
             real_prob = float(probs[0][0].cpu())
             fake_prob = float(probs[0][1].cpu())
-            
-            # 打印详细的预测信息
-            print(f"预测概率 - 真实: {real_prob:.4f}, 伪造: {fake_prob:.4f}")
-            
+            print(f"📊 检测结果 - 真实概率: {real_prob:.4f}, 伪造概率: {fake_prob:.4f}")
             is_fake = fake_prob > 0.5
             
-        return is_fake, fake_prob
+        return is_fake, fake_prob, input_data_with_effect
+    
+
+    def extract_frames(self, video_path: str, num_frames: int = 30) -> List[Image.Image]:
+        """从视频中均匀提取指定数量的帧"""
+        cap = cv2.VideoCapture(video_path)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        frame_indices = np.linspace(0, total_frames-1, num_frames, dtype=int)
+        
+        frames = []
+        for idx in frame_indices:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+            ret, frame = cap.read()
+            if ret:
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                frame = Image.fromarray(frame)
+                frames.append(frame)
+        
+        cap.release()
+        return frames
+    
+
+    # def predict_video(self, video_path: str, num_frames: int = 30) -> Tuple[bool, float, List[Tuple[bool, float]]]:
+    #     """
+    #     预测视频是否为深度伪造
+    #     返回: (是否伪造, 伪造概率, 每帧的预测结果)
+    #     """
+    #     frames = self.extract_frames(video_path, num_frames)
+    #     frame_predictions = []
+    #     fake_probs = []
+
+    #     for frame in frames:
+    #         is_fake, fake_prob = self.predict(frame)
+    #         frame_predictions.append((is_fake, fake_prob))
+    #         fake_probs.append(fake_prob)
+
+    #     # 计算平均伪造概率
+    #     avg_fake_prob = np.mean(fake_probs)
+    #     is_fake = avg_fake_prob > 0.5
+
+    #     return is_fake, avg_fake_prob, frame_predictions

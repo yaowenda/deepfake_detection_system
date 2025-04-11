@@ -34,7 +34,7 @@ def get_checkpoint_dir(path_to_job):
     """
     return os.path.join(path_to_job, "checkpoints")
 
-
+# 作用是生成一个检查点文件的完整路径
 def get_path_to_checkpoint(path_to_job, epoch, cfg):
     """
     Get the full path to a checkpoint file.
@@ -42,6 +42,7 @@ def get_path_to_checkpoint(path_to_job, epoch, cfg):
         path_to_job (string): the path to the folder of the current job.
         epoch (int): the number of epoch for the checkpoint.
     """
+    #生成文件名的规则
     file_name = (
         cfg['MODEL']['MODEL_NAME']
         + '_'

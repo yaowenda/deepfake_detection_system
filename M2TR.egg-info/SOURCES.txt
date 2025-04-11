@@ -1,9 +1,11 @@
+LICENSE
 README.md
 setup.py
 M2TR/__init__.py
 M2TR.egg-info/PKG-INFO
 M2TR.egg-info/SOURCES.txt
 M2TR.egg-info/dependency_links.txt
+M2TR.egg-info/requires.txt
 M2TR.egg-info/top_level.txt
 M2TR/datasets/CelebDF.py
 M2TR/datasets/FFDF.py
